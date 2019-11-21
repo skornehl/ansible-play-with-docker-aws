@@ -1,0 +1,51 @@
+---
+# If PWD changes things in code, it will break in this file
+- name: Replace localhost to actual DNS
+  replace:
+    path: "{{ PWD_HOME }}/config/config.go"
+    regexp: 'localhost'
+    replace: "{{ url }}"
+    backup: no
+
+- name: Increase timeout to life for a workshop day
+  replace:
+    path: "{{ PWD_HOME }}/api.go"
+    regexp: '4h'
+    replace: '10h'
+    backup: no
+
+- name: Add K8S Image to PWD
+  replace:
+    path: "{{ PWD_HOME }}/api.go"
+    regexp:  '{"franela/dind"}'
+    replace: '{"franela/dind", "franela/k8s"}'
+    backup: no
+  when: kubernetes == true
+ 
+- name: Make K8S default
+  replace:
+    path: "{{ PWD_HOME }}/api.go"
+    regexp:  'DefaultDinDInstanceImage: "franela/dind"'
+    replace: "DefaultDinDInstanceImage: \"franela/{{ default_image }}\""
+    backup: no
+  when: kubernetes == true
+
+- name: Init a new swarm with default parameters
+  docker_swarm:
+    state: present
+
+- name: Run dep ensure
+  shell: dep ensure
+  args:
+    chdir: "{{ PWD_HOME }}"
+  environment:
+    GOPATH: "{{ GOPATH }}"
+
+- name: Docker pull Images
+  docker_image:
+    name: "{{ item }}"
+    source: pull
+  become: yes
+  loop:
+    - "franela/dind"
+    - "franela/k8s"

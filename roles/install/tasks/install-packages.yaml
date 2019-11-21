@@ -1,0 +1,42 @@
+---
+- name: Add Docker GPG key
+  apt_key: 
+    url: https://download.docker.com/linux/ubuntu/gpg
+
+- name: Add Docker APT repository
+  apt_repository:
+    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ansible_distribution_release}} stable
+
+- name: Ensure there is no old versioned docker installation
+  package:
+    name: "{{ item }}"
+    state: absent
+    update_cache: yes
+  loop:
+  - docker
+  - docker-engine
+  - docker.io 
+  - containerd 
+  - runc
+
+- name: Install all packages
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - docker-ce
+    - containerd.io
+    - docker-compose
+    - python3-pip
+    - go-dep
+
+- name: Install Docker-py
+  pip:
+    name: docker-py
+    state: present
+
+- name: Clone PWD
+  git:
+    force: yes
+    repo: 'https://github.com/play-with-docker/play-with-docker.git'
+    dest: "{{ PWD_HOME }}"

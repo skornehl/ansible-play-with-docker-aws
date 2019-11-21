@@ -1,0 +1,98 @@
+---
+- name: Remove old EC2 key
+  ec2_key:
+    profile: "{{ aws_profile }}"
+    name: "{{ ec2_keypair }}"
+    region: "{{ aws_region }}"
+    state: absent
+
+- name: Create a new EC2 key
+  ec2_key:
+    profile: "{{ aws_profile }}"
+    name: "{{ ec2_keypair }}"
+    region: "{{ aws_region }}"
+    force: yes
+  register: ec2_key_result
+
+- name: Save private key
+  copy: 
+    content: "{{ ec2_key_result.key.private_key }}" 
+    dest: "./{{ ec2_keypair }}.pem" 
+    mode: 0600
+  when: ec2_key_result.changed
+
+- name: Gather facts about subnets
+  ec2_vpc_subnet_facts:
+    region: "{{ aws_region }}"
+    profile: "{{ aws_profile }}"
+    filters:
+      vpc-id: "{{ aws_vpc }}"
+  register: subnet_facts  
+
+- name: Gather facts about Ubuntu
+  ec2_ami_facts:
+    profile: "{{ aws_profile }}"
+    region: "{{ aws_region }}"
+    # Owner is Ubuntu Account
+    owners: 679593333241
+    filters:
+      name: "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server*"
+  register: var_ec2_ami
+
+- name: Add PWD security group
+  ec2_group:
+    profile: "{{ aws_profile }}"
+    region: "{{ aws_region }}"
+    name: "{{ ec2_tag_Name }}"
+    description: "Automatic rule for {{ ec2_tag_Name }}"
+    vpc_id: "{{ aws_vpc }}"
+    purge_rules: yes
+    rules:
+      - proto: tcp
+        ports:
+        - 80
+        - 22
+        cidr_ip: "{{ aws_sec_grp_src }}"
+        rule_desc: allow all on port 80
+      - proto: all
+        group_name: "{{ ec2_tag_Name }}"
+  register: var_awc_sec_grp
+
+- name: Launch the new EC2 Instance
+  ec2:
+    profile: "{{ aws_profile }}"
+    region: "{{ aws_region }}"
+    group_id: "{{ var_awc_sec_grp.group_id }}"
+    vpc_subnet_id: "{{ subnet_facts.subnets|map(attribute='id')|list|random }}"
+    instance_type: "{{ ec2_instance_type }}"
+    image: "{{ var_ec2_ami.images[0].image_id }}"
+    volumes:
+      - device_name: /dev/sda1
+        volume_type: gp2
+        volume_size: "{{ ec2_volume_size }}" 
+    wait: yes 
+    key_name: "{{ ec2_keypair }}"
+    instance_tags: '{"Name":"{{ec2_tag_Name}}"}'
+    assign_public_ip: yes
+    count: "{{ ec2_instance_count }}"
+  register: ec2
+
+- name: Add to hosts
+  add_host:
+    name: "{{ item.public_ip }}"
+    groups: pwd
+    url: "{{ dns_prefix }}{{ my_idx }}.{{ ec2_tag_Name }}.{{ public_domain }}"
+    public_dns_name: "{{ item.public_dns_name }}"
+    ansible_ssh_private_key_file: "./{{ ec2_keypair }}.pem" 
+  loop: "{{ ec2.instances }}"
+  loop_control:
+    index_var: my_idx
+
+- name: Wait for the instances to boot by checking the ssh port
+  wait_for: 
+    host: "{{ item.public_ip }}"
+    port: 22 
+    delay: 60 
+    timeout: 320 
+    state: started
+  with_items: "{{ ec2.instances }}"

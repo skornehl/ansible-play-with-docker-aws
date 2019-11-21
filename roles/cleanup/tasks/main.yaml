@@ -1,0 +1,66 @@
+---
+- name: Terminate instances
+  ec2_instance:
+    profile: "{{ aws_profile }}"
+    region: "{{ aws_region }}"
+    state: absent
+    wait: yes 
+    filters:
+      "tag:Name": "{{ ec2_tag_Name }}"
+
+- name: Remove Security group
+  ec2_group:
+    profile: "{{ aws_profile }}"
+    region: "{{ aws_region }}"
+    name: "{{ ec2_tag_Name }}"
+    vpc_id: "{{ aws_vpc }}"
+    state: absent
+
+- name: Remove EC2 key
+  ec2_key:
+    profile: "{{ aws_profile }}"
+    name: "{{ ec2_tag_Name }}-{{ aws_region }}"
+    region: "{{ aws_region }}"
+    state: absent
+
+- name: Remove local key
+  file:
+    state: absent
+    path: "./{{ ec2_tag_Name }}-{{ aws_region }}.pem"
+  delegate_to: 127.0.0.1
+
+- name: Get all hosted zones
+  route53_facts:
+    profile: "{{ aws_profile }}"
+    query: hosted_zone
+  register: hosted_zone
+
+- name: Get ZoneID of PWD Zone
+  set_fact:
+    zone_id: "{{ item['Id'] }}"
+  loop: "{{ hosted_zone['HostedZones'] }}"
+  when: item['Name'][0:-1] == public_domain
+
+- name: List record sets in Zone
+  route53_facts:
+    profile: "{{ aws_profile }}"
+    query: record_sets
+    hosted_zone_id: "{{ zone_id }}"
+  register: record_sets
+
+- name: Build URL Part
+  set_fact:
+    url: "{{ ec2_tag_Name }}.{{ public_domain }}"
+
+- name: Remove all record sets from PWD
+  route53:
+    profile: "{{ aws_profile }}"
+    state: absent
+    zone: "{{ public_domain }}"
+    record: "{{ item['Name']| replace('\\052', '*') }}"
+    type:  "{{ item['Type'] }}"
+    ttl:  "{{ item['TTL'] }}"
+    value: 
+      - "{{ item['ResourceRecords'][0]['Value'] }}"
+  loop: "{{ record_sets['ResourceRecordSets'] }}"
+  when: dns_prefix in item['Name'] and url in item['Name']

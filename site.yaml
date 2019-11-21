@@ -1,0 +1,15 @@
+---
+- hosts: local
+  connection: local
+  gather_facts: no
+  roles:
+    - role: ec2 
+      when: cleanup != "true"
+    - role: cleanup 
+      when: cleanup == "true"
+
+- hosts: pwd
+  gather_facts: yes
+  roles:
+    - role: install
+      when: cleanup != "true"

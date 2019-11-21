@@ -1,0 +1,30 @@
+# Your public domain to use
+public_domain:      "YOUR-DOMAIN"
+dns_prefix:         "host"
+
+# Name Tag of the instances
+ec2_tag_Name:       "pwd"
+
+# VPC ID where PWD is running in
+aws_vpc:            "vpc-012345"
+# Your local aws profile
+aws_profile:        "default"
+# Region to start PWD in
+aws_region:         "eu-west-1"
+# If you want to limit who can reach the PWD instance (Your office IP for example)
+aws_sec_grp_src:    "0.0.0.0/0"
+
+# How many machines do you need?
+ec2_instance_count: 1
+ec2_instance_type:  "m5a.large"
+
+# Do not change this unless you change your OS
+ansible_user:       "ubuntu"
+
+# Cleanup run?
+cleanup:            false
+
+# Add K8s Support?
+kubernetes:         true
+# Can be dind or k8s
+default_image:      "dind"

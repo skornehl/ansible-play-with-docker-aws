@@ -1,0 +1,2 @@
+GOPATH:         "/home/ubuntu/go"
+PWD_HOME:       "{{ GOPATH }}/src/github.com/play-with-docker/play-with-docker"

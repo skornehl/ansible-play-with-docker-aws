@@ -1,0 +1,36 @@
+---
+- name: Create R53 records
+  route53:
+    profile: "{{ aws_profile }}"
+    state: present
+    zone: "{{ public_domain }}"
+    record: "{{ item }}"
+    type: CNAME
+    value: "{{ public_dns_name  }}" 
+    ttl: 60
+    overwrite: yes
+  loop:
+    - "{{ url }}"
+    - "*.{{ url }}"
+  delegate_to: 127.0.0.1
+
+- include: install-packages.yaml 
+  become: yes
+
+- name: Add ubuntu user to Docker group
+  user: 
+    name: ubuntu
+    groups: docker
+    append: yes
+  become: yes
+
+- include: pwd-config.yaml 
+  become: yes
+
+- name: Run docker compose
+  shell: docker-compose up -d
+  args:
+    chdir: "{{ PWD_HOME }}"
+  environment:
+    GOPATH: "{{ GOPATH }}"
+  become: yes
